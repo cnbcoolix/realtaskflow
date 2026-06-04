@@ -10,13 +10,13 @@ from typing import Optional, List
 from database import get_db, User, Task
 from ai_helper import suggest_priority, suggest_duration
 
-app = FastAPI(title="TaskFlow API")
+from fastapi.middleware.cors import CORSMiddleware
+//allow the front end and the backend to communicate
 
-# Allow the React frontend to talk to this backend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
