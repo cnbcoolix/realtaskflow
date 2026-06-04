@@ -10,8 +10,7 @@ from typing import Optional, List
 from database import get_db, User, Task
 from ai_helper import suggest_priority, suggest_duration
 
-from fastapi.middleware.cors import CORSMiddleware
-//allow the front end and the backend to communicate
+app = FastAPI(title="TaskFlow API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,24 +19,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# Secret key for login tokens (change this in production)
+
 SECRET_KEY = "taskflow-secret-key-change-me"
 ALGORITHM = "HS256"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-# --- Helper functions ---
-
 def hash_password(password): return pwd_context.hash(password)
 def verify_password(plain, hashed): return pwd_context.verify(plain, hashed)
 
 def create_token(user_id: int):
-    # Creates a login token that expires in 24 hours
     data = {"sub": str(user_id), "exp": datetime.utcnow() + timedelta(hours=24)}
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    # Reads the token and returns the logged-in user
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = int(payload.get("sub"))
@@ -46,8 +41,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         return user
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
-
-# --- Pydantic models (what the API accepts/returns) ---
 
 class RegisterRequest(BaseModel):
     email: str
@@ -65,11 +58,8 @@ class TaskUpdate(BaseModel):
     priority: Optional[str] = None
     estimated_minutes: Optional[int] = None
 
-# --- Auth endpoints ---
-
 @app.post("/register")
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
-    # Check if email already used
     if db.query(User).filter(User.email == req.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
     user = User(email=req.email, password_hash=hash_password(req.password))
@@ -89,17 +79,13 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
 def get_me(current_user: User = Depends(get_current_user)):
     return {"id": current_user.id, "email": current_user.email}
 
-# --- Task endpoints ---
-
 @app.get("/tasks")
 def get_tasks(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Return only this user's tasks
     tasks = db.query(Task).filter(Task.user_id == current_user.id).all()
     return tasks
 
 @app.post("/tasks")
 def create_task(req: TaskCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # AI auto-suggests priority and duration from the title
     task = Task(
         user_id=current_user.id,
         title=req.title,
@@ -133,7 +119,6 @@ def delete_task(task_id: int, current_user: User = Depends(get_current_user), db
 
 @app.get("/stats")
 def get_stats(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Dashboard numbers
     tasks = db.query(Task).filter(Task.user_id == current_user.id).all()
     return {
         "total": len(tasks),
